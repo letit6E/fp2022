@@ -1,4 +1,7 @@
-(** variables name [a-z_][0-9a-zA-Z_] *)
+(** Copyright 2022-2023, Rustam Shangareev *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
 type id = string [@@deriving show { with_path = false }]
 
 type bin_op =
