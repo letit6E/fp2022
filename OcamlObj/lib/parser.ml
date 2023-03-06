@@ -109,14 +109,13 @@ let ebinopr bin_operator expr1 expr2 = EBinop (bin_operator, expr1, expr2)
 let evar name = EVar name
 let eif expr1 expr2 expr3 = EIf (expr1, expr2, expr3)
 let elet binding expr = ELet (binding, expr)
-let efunction cases = EFun (PVar "match", EMatch (EVar "match", cases))
-let efun name expr = EFun (PVar name, expr)
+let efun name expr = EFun (name, expr)
 let efun args rhs = List.fold_right args ~f:efun ~init:rhs
 let ematch expr cases = EMatch (expr, cases)
-let eobj exprl = EObj exprl
+let eobj (self_name, exprl) = EObj (self_name, exprl)
 let ometh pattern expr = OMeth (pattern, expr)
 let oval pattern expr = OVal (pattern, expr)
-let ecallmeth (name1, name2) = ECallM (name1, name2)
+let ecallmeth expr name = ECallM (expr, name)
 let eapp fn arg = EApp (fn, arg)
 let pvar name = PVar name
 let pconst c = PConst c
@@ -189,9 +188,9 @@ let pconst = const >>| pconst
 let prs_decl prs_expr =
   trim
   @@ lift3
-       (fun is_rec pvar expr -> is_rec, pvar, expr)
+       (fun is_rec name expr -> is_rec, name, expr)
        (token "let" *> option false (token "rec" >>| fun _ -> true))
-       (empty1 *> pvar)
+       (empty1 *> name)
        (lift2 efun (empty *> many name <* token "=") prs_expr)
 ;;
 
@@ -207,10 +206,7 @@ let prs_if prs_expr =
 
 let prs_match prs_expr =
   let ptrn =
-    fix
-    @@ fun pttrn ->
-    choice [ pconst; pvar; token "(" *> pttrn <* token ")" ]
-    <|> token "(" *> token ")" *> return PUnit
+    fix @@ fun pttrn -> choice [ pconst; pvar; token "(" *> pttrn <* token ")" ]
   in
   let prs_case =
     lift2 (fun pattern expr -> pattern, expr) (token "|" *> ptrn <* token "->") prs_expr
@@ -223,28 +219,32 @@ let prs_obj prs_expr =
     trim
     @@ lift2
          ometh
-         (token "method" *> pvar)
+         (token "method" *> name)
          (lift2 efun (empty *> many name <* token "=") prs_expr)
   in
-  let oval = trim @@ lift2 oval (token "val" *> pvar) (token "=" *> prs_expr) in
-  token "object" *> many (choice [ oval; omethod ]) <* token "end" >>| eobj
+  let oval = trim @@ lift2 oval (token "val" *> name) (token "=" *> prs_expr) in
+  token "object"
+  *> lift2
+       (fun self_name exprl -> self_name, exprl)
+       (option "" (token "(" *> name <* token ")"))
+       (many (choice [ oval; omethod ]))
+  <* token "end"
+  >>| eobj
 ;;
 
 let prs_call_meth =
-  lift2 (fun name1 name2 -> ecallmeth (name1, name2)) (name <* token "#") name
+  let prs_rest = many (token "#" *> name) in
+  let fold_into_expr expr names = List.fold_left names ~f:ecallmeth ~init:expr in
+  lift3
+    (fun expr name names -> fold_into_expr (ecallmeth expr name) names)
+    (name >>| evar <* token "#")
+    name
+    prs_rest
 ;;
 
 let prs_expr =
   fix (fun pexp ->
-    let term =
-      choice
-        [ token "()" *> return EUnit
-        ; parens pexp
-        ; econst <$> uconst
-        ; prs_call_meth
-        ; evar <$> name
-        ]
-    in
+    let term = choice [ parens pexp; econst <$> uconst; prs_call_meth; evar <$> name ] in
     let term =
       lift2
         (fun expr l -> List.fold_left ~f:eapp ~init:expr l)
