@@ -1,0 +1,34 @@
+(lang dune 2.8)
+
+(generate_opam_files true)
+
+(cram enable)
+
+(license LGPL-3.0-or-later)
+
+(authors "Egor Denisov")
+
+(maintainers "Egor Denisov")
+
+(bug_reports "https://github.com/Lev0nid/fp2022/issues")
+
+(homepage "https://github.com/Lev0nid/fp2022")
+
+(package
+ (name OCamlPrintfDenisov)
+ (synopsis "OCaml with printf")
+ (description "OCaml interpretation with printf")
+ (version 0.1)
+ (depends
+  dune
+  angstrom
+  (ppx_inline_test :with-test)
+  qcheck-core
+  ppx_expect
+  ppx_deriving
+  (odoc :with-doc)
+  (ocamlformat :build)
+  base
+  angstrom
+  ppx_show
+  stdio))
