@@ -65,9 +65,9 @@ let token s = empty *> string s
 let keyword s =
   token s
   <* (peek_char
-     >>| function
-     | Some x when is_valid_ident x -> fail "Incorrect keyword"
-     | _ -> return None)
+      >>| function
+      | Some x when is_valid_ident x -> fail "Incorrect keyword"
+      | _ -> return None)
 ;;
 
 let between l r p = l *> p <* r
@@ -200,9 +200,9 @@ let pack =
     @@ fun _self ->
     empty_lr
       ((fun hd tl -> hd :: tl)
-      <$> token "(" *> d.other d
-      <*> many1 (token "," *> d.other d)
-      <* token ")")
+       <$> token "(" *> d.other d
+       <*> many1 (token "," *> d.other d)
+       <* token ")")
     >>| pttuple
   in
   let other d =
@@ -254,13 +254,13 @@ let pack =
       let binding =
         empty_lr
           (bbind
-          <$> keyword "val" *> option false (keyword "rec" >>| fun _ -> true)
-          <*> pt
-          <*> (efun <$> (empty *> many pt <* token "=") <*> d.exp d))
+           <$> keyword "val" *> option false (keyword "rec" >>| fun _ -> true)
+           <*> pt
+           <*> (efun <$> (empty *> many pt <* token "=") <*> d.exp d))
         <|> (bbind
-            <$> keyword "fun" *> return true
-            <*> pt
-            <*> (efun <$> (empty *> many pt <* token "=") <*> d.exp d))
+             <$> keyword "fun" *> return true
+             <*> pt
+             <*> (efun <$> (empty *> many pt <* token "=") <*> d.exp d))
       in
       keyword "let" *> empty_lr (elet <$> (many binding <* keyword "in") <*> d.exp d)
       <* keyword "end"
