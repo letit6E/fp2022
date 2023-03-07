@@ -49,16 +49,14 @@
   > val bool = true;;
   > val string = "Hello World!";;
   > val list = [3, 1, 15, 7];;
-  > val rf = ref 15;;
-  > val option = SOME rf;;
-  > val tuple = (string, bool, int, list, rf, option);;
+  > val option = SOME (1, false);;
+  > val tuple = (string, bool, int, list, option);;
   val int = 3: int
   val bool = true: bool
   val string = "Hello World!": string
   val list = [3, 1, 15, 7]: int list
-  val rf = 15: int ref
-  val option = SOME 15: int ref option
-  val tuple = ("Hello World!", true, 3, [3, 1, 15, 7], 15, SOME 15): (string * bool * int * int list * int ref * int ref option)
+  val option = SOME (1, false): (int * bool) option
+  val tuple = ("Hello World!", true, 3, [3, 1, 15, 7], SOME (1, false)): (string * bool * int * int list * (int * bool) option)
   _______
 
 % some constructors test
@@ -78,47 +76,6 @@
   >     t + x t 4
   >   end;;
   val test = 10: int
-  _______
-
-% ref test and wildcard not printing test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "test";;
-  > val _ = x := "error";;
-  > val tmp = x;;
-  val x = "test": string ref
-  val tmp = "error": string ref
-  _______
-
-% unit type test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "heh";;
-  > val unit = x := "lol";;
-  val x = "heh": string ref
-  val unit = (): unit
-  _______
-
-% ref type property test and wildcard not printing test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "abc";;
-  > val _ = x := "xyz";;
-  > val tmp = x;;
-  > val _ = tmp := "stop";;
-  > val check = (tmp, x);;
-  val x = "abc": string ref
-  val tmp = "xyz": string ref
-  val check = ("stop", "stop"): (string ref * string ref)
-  _______
-
-% dereference test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "abc";;
-  > val derefer = !x;;
-  > val assign = x := "test";;
-  > val result = (derefer, x);;
-  val x = "abc": string ref
-  val derefer = "abc": string
-  val assign = (): unit
-  val result = ("abc", "test"): (string * string ref)
   _______
 
 % factorial test
@@ -165,12 +122,12 @@
   val res = 15: int
   _______
 
-% ref not equality type test
+% not equality type test
   $ ./interpreter_test.exe << EOF
-  > val x = ref "abc";;
+  > val x = SOME 15;;
   > val y = x;;
   > val check = x = y;;
-  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type ref and ref
+  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type option and option
   _______
 
 % unary operator inference test
@@ -179,6 +136,14 @@
   > val minus = fn x => ~x;;
   val r = fn: bool -> bool
   val minus = fn: int -> int
+  _______
+
+% wildcard lambda argument test
+  $ ./interpreter_test.exe << EOF
+  > val r = fn _ => fn x => 2 * x;;
+  > val t = r "true" 4;;
+  val r = fn: 'a -> int -> int
+  val t = 8: int
   _______
 
 % pattern matching, asteriks, equality inference test
