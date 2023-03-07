@@ -335,10 +335,10 @@ module Interpret (M : MONAD_FAIL) = struct
            | PtVar name ->
              run
                (lookup_env name basic)
-                  ~ok:
-                    (function
-                     | InternalVal -> return (EFun (pt, exp))
-                     | _ -> helper exp)
+               ~ok:
+                 (function
+                  | InternalVal -> return (EFun (pt, exp))
+                  | _ -> helper exp)
                ~err:(fun _ -> return (EFun (pt, exp)))
            | PtWild -> return (EFun (pt, exp))
            | p -> fail (Wrong_arg_pat p))
