@@ -8,59 +8,59 @@ val pp_id : Format.formatter -> id -> unit
 val show_id : id -> string
 
 type bin_op =
-  | And
-  | Or
-  | Less
-  | Leq
-  | Gre
-  | Geq
-  | Eq
-  | Neq
-  | Add
-  | Sub
-  | Mul
-  | Div
+  | And (**  and *)
+  | Or (**  or  *)
+  | Less (**  <   *)
+  | Leq (**  <=  *)
+  | Gre (**  >   *)
+  | Geq (**  >=  *)
+  | Eq (** =   *)
+  | Neq (**  <>  *)
+  | Add (**  +   *)
+  | Sub (**  -   *)
+  | Mul (**  *   *)
+  | Div (**  div   *)
 
 and un_op =
-  | Not
-  | Minus
+  | Not (**  not  *)
+  | Minus (** ~ *)
 
 and binding = bool * pt * exp
 and case = pt * exp
-and decl = DLet of binding
+and decl = DLet of binding (**  val y = 256   *)
 and prog = decl list
 
 and const =
-  | CString of id
-  | CInt of int
-  | CBool of bool
+  | CString of id (**  "xyz"  *)
+  | CInt of int (**   256    *)
+  | CBool of bool (**  false   *)
 
 and exp =
-  | EConst of const
-  | ENone
-  | ENil
-  | EUnOp of un_op * exp
-  | EVar of id
-  | ECons of exp * exp
-  | ETuple of exp list
-  | ELet of binding list * exp
-  | EFun of pt * exp
-  | EMatch of exp * case list
-  | ESome of exp
-  | EArg of exp
-  | EIf of exp * exp * exp
-  | EBinOp of bin_op * exp * exp
-  | EApp of exp * exp
+  | EConst of const (**    false    *)
+  | ENone (**    NONE    *)
+  | ENil (** [] *)
+  | EUnOp of un_op * exp (**    not x, ~x, !x    *)
+  | EVar of id (**    x    *)
+  | ECons of exp * exp (**    x :: xs    *)
+  | ETuple of exp list (**    x, y, z    *)
+  | ELet of binding list * exp (**    let x = 256 in 512    *)
+  | EFun of pt * exp (**   fn x => x   *)
+  | EMatch of exp * case list (**    case x of 1 => 2 | _ => x * 1337    *)
+  | ESome of exp (**    SOME a    *)
+  | EArg of exp (**    arg    *)
+  | EIf of exp * exp * exp (**    if predicate then x else y    *)
+  | EBinOp of bin_op * exp * exp (**    25 div (7 + ~2)    *)
+  | EApp of exp * exp (**    fold a list init    *)
 
 and pt =
-  | PtWild
-  | PtVar of id
-  | PtConst of const
-  | PtCons of pt * pt
-  | PtSome of pt
-  | PtNone
-  | PtNil
-  | PtTuple of pt list
+  | PtWild (**  _  *)
+  | PtVar of id (**  xyz   *)
+  | PtConst of const (**  256   *)
+  | PtCons of pt * pt (**  hd :: tl  *)
+  | PtSome of pt (**   SOME a  *)
+  | PtNone (**  NONE  *)
+  | PtNil (**  []  *)
+  | PtTuple of pt list (**  x, y, z   *)
 
 val pp_bin_op : Format.formatter -> bin_op -> unit
 val show_bin_op : bin_op -> string
