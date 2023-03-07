@@ -158,35 +158,6 @@ let%test _ =
 
 let%test _ =
   test_parse
-    ~label:"Ref test"
-    ~code:
-      {|
-
-    val r = ref 0;;
-    val t = fn r => r := 0;;
-    val tmp = !r;;
-    val t = ref (SOME 1, NONE, "abc");;
-
-    |}
-    ~expected:
-      [ DLet (false, PtVar "r", EApp (EVar "ref", EArg (EConst (CInt 0))))
-      ; DLet
-          ( false
-          , PtVar "t"
-          , EFun (PtVar "r", EApp (EApp (EVar ":=", EVar "r"), EConst (CInt 0))) )
-      ; DLet (false, PtVar "tmp", EApp (EVar "!", EVar "r"))
-      ; DLet
-          ( false
-          , PtVar "t"
-          , EApp
-              ( EVar "ref"
-              , EArg (ETuple [ ESome (EConst (CInt 1)); ENone; EConst (CString "abc") ])
-              ) )
-      ]
-;;
-
-let%test _ =
-  test_parse
     ~label:"fun test"
     ~code:
       {|

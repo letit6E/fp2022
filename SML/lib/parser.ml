@@ -118,14 +118,12 @@ let choice_op ops =
 ;;
 
 let cons = token "::" *> return econs
-let refupd = token ":=" *> return (fun x y -> EApp (EApp (EVar ":=", x), y))
 
 let apply_unary p =
   choice
     [ token "~" *> p >>| eunop Minus
     ; keyword "not" *> p >>| eunop Not
     ; token "+" *> p
-    ; (token "!" *> p >>= fun x -> return @@ EApp (EVar "!", x))
     ; p
     ]
 ;;
@@ -163,9 +161,9 @@ let cint =
 ;;
 
 let cbool =
-  let _true = keyword "true" *> return (cbool true) in
-  let _false = keyword "false" *> return (cbool false) in
-  _true <|> _false
+  let ctrue = keyword "true" *> return (cbool true) in
+  let cfalse = keyword "false" *> return (cbool false) in
+  ctrue <|> cfalse
 ;;
 
 let cstring =
@@ -320,7 +318,7 @@ let pack =
     let eq_op = procl (choice_op [ "=", Eq; "<>", Neq ]) cmp_op @@ d.key d in
     let conj_op = procl (choice_op [ "andalso", And ]) eq_op @@ d.key d in
     let disj_op = procl (choice_op [ "orelse", Or ]) conj_op @@ d.key d in
-    empty_lr @@ procr refupd disj_op @@ d.key d
+    empty_lr @@ disj_op
   in
   { key; op; exp; tuple }
 ;;

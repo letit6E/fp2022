@@ -39,12 +39,10 @@ type exval =
   | SomeVal of exval
   | NoneVal
   | FunVal of pt * exp * env Lazy.t * scan_info
-  | RefVal of exval ref
   | IntVal of int
   | StringVal of string
   | BoolVal of bool
   | InternalVal
-  | UnitVal
 [@@deriving show { with_path = false }]
 
 and error =
@@ -59,7 +57,6 @@ and error =
   | Not_function of exp
   | Let_rec_only_vars of pt
   | Division_by_zero
-  | Ref_error
 [@@deriving show { with_path = false }]
 
 and env = exval EnvrMap.t [@@deriving show { with_path = false }]
@@ -76,24 +73,22 @@ module Interpret (M : MONAD_FAIL) = struct
       | BoolVal b -> sprintf "%b" b
       | FunVal (_, _, _, _) -> sprintf "fn"
       | InternalVal -> sprintf "<internal>"
-      | RefVal x -> helper std_formatter !x
       | IntVal n -> sprintf ((if n < 0 then "~" else "") ^^ "%d") (Int.abs n)
       | TupleVal l ->
         let rec elems = function
           | [ hd ] -> helper std_formatter hd
-          | hd :: tail -> helper std_formatter hd ^ ", " ^ elems tail
+          | hd :: tail -> String.concat ", " [ helper std_formatter hd; elems tail ]
           | _ -> ""
         in
         sprintf "(%s)" (elems l)
       | ListVal l ->
         let rec elems = function
           | [ hd ] -> helper std_formatter hd
-          | hd :: tail -> helper std_formatter hd ^ ", " ^ elems tail
+          | hd :: tail -> String.concat ", " [ helper std_formatter hd; elems tail ]
           | _ -> ""
         in
         sprintf "[%s]" (elems l)
       | StringVal s -> sprintf "%S" s
-      | UnitVal -> sprintf "()"
     in
     sprintf "val %s = %s: %!" k (helper std_formatter v)
   ;;
@@ -103,12 +98,10 @@ module Interpret (M : MONAD_FAIL) = struct
     | ListVal _ -> "list"
     | SomeVal _ | NoneVal -> "option"
     | FunVal _ -> "fn"
-    | RefVal _ -> "ref"
     | IntVal _ -> "int"
     | StringVal _ -> "string"
     | BoolVal _ -> "bool"
     | InternalVal -> "internal"
-    | UnitVal -> "unit"
   ;;
 
   let pp_error e =
@@ -149,9 +142,6 @@ module Interpret (M : MONAD_FAIL) = struct
         printf "Elaboration failed: %s is not a function" (show_exp exp)
       | Let_rec_only_vars _ -> printf {|Parsing failed: Using "rec" requires a variable|}
       | Division_by_zero -> printf "SML exception: divising by zero"
-      | Ref_error ->
-        printf
-          {|Elaboration failed: Type clash. Operators "!" and ":=" only apply to ref values|}
     in
     helper std_formatter e;
     printf "\n"
@@ -257,6 +247,7 @@ module Interpret (M : MONAD_FAIL) = struct
          let new_state = exd_env id InternalVal env_b in
          let new_list = keys_b @ [ id ] in
          efun env env_lab env_opt new_state new_list exp
+       | PtWild -> efun env env_lab env_opt empty_env [ "" ] exp
        | p -> fail (Wrong_arg_pat p))
     | _ -> return (Info (env_lab, env_opt, env_b, keys_b))
 
@@ -334,48 +325,31 @@ module Interpret (M : MONAD_FAIL) = struct
     | ETuple exps ->
       M.all (List.map (eval_expr env) exps) >>= fun x -> return (TupleVal x)
     | EApp (exp1, exp2) ->
-      (match exp1 with
-       | EApp (EVar ":=", x) ->
-         let* evaled = eval_expr env exp2 in
-         let* evaled_ref = eval_expr env x in
-         (match evaled_ref with
-          | RefVal k ->
-            k := evaled;
-            return UnitVal
-          | _ -> fail Ref_error)
-       | EVar "ref" ->
-         let* evaled = eval_expr env exp2 in
-         return (RefVal (ref evaled))
-       | EVar "!" ->
-         let* evaled = eval_expr env exp2 in
-         (match evaled with
-          | RefVal x -> return !x
-          | _ -> fail Ref_error)
-       | _ ->
-         let* Info (lab, opt, basic, keys), new_state, body =
-           scan_app env (EApp (exp1, exp2))
-         in
-         let new_state = EnvrMap.union (fun _ _ y -> Some y) opt new_state in
-         let rec helper = function
-           | EFun (pt, exp) ->
-             (match pt with
-              | PtVar name ->
-                run
-                  (lookup_env name basic)
+      let* Info (lab, opt, basic, keys), new_state, body =
+        scan_app env (EApp (exp1, exp2))
+      in
+      let new_state = EnvrMap.union (fun _ _ y -> Some y) opt new_state in
+      let rec helper = function
+        | EFun (pt, exp) ->
+          (match pt with
+           | PtVar name ->
+             run
+               (lookup_env name basic)
                   ~ok:
                     (function
                      | InternalVal -> return (EFun (pt, exp))
                      | _ -> helper exp)
-                  ~err:(fun _ -> return (EFun (pt, exp)))
-              | p -> fail (Wrong_arg_pat p))
-           | e -> return e
-         in
-         let* body = helper body in
-         (match body with
-          | EFun (pt, exp) ->
-            let tmp = FunVal (pt, exp, lazy new_state, Info (lab, opt, basic, keys)) in
-            return tmp
-          | _ -> eval_expr new_state body))
+               ~err:(fun _ -> return (EFun (pt, exp)))
+           | PtWild -> return (EFun (pt, exp))
+           | p -> fail (Wrong_arg_pat p))
+        | e -> return e
+      in
+      let* body = helper body in
+      (match body with
+       | EFun (pt, exp) ->
+         let tmp = FunVal (pt, exp, lazy new_state, Info (lab, opt, basic, keys)) in
+         return tmp
+       | _ -> eval_expr new_state body)
     | ECons (exp1, exp2) ->
       let* evaled_exp1 = eval_expr env exp1 in
       let* evaled_exp2 = eval_expr env exp2 in
@@ -470,10 +444,9 @@ let eval_pp _ code =
       ~ok:(fun (x, y) ->
         let error_check =
           List.find_opt
-            (fun t ->
-              match t with
-              | Error _ -> true
-              | _ -> false)
+            (function
+             | Error _ -> true
+             | _ -> false)
             y
         in
         match error_check with

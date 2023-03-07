@@ -76,7 +76,7 @@ module Type = struct
   let rec occurs_in v = function
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> List.exists typ_list ~f:(occurs_in v)
-    | TList typ | TOption typ | TRef typ -> occurs_in v typ
+    | TList typ | TOption typ -> occurs_in v typ
     | _ -> false
   ;;
 
@@ -87,7 +87,7 @@ module Type = struct
       | TArr (left, right) -> ehelper (ehelper acc left) right
       | TTuple typ_list ->
         List.fold_right typ_list ~f:(fun t s -> Set.union s (ehelper empty t)) ~init:acc
-      | TList typ | TOption typ | TRef typ -> ehelper acc typ
+      | TList typ | TOption typ -> ehelper acc typ
       | TGround _ | TEqualityVar _ -> acc
     in
     ehelper empty
@@ -143,7 +143,6 @@ end = struct
       | TTuple typ_list -> tuple_t @@ List.map typ_list ~f:ehelper
       | TList typ -> list_t @@ ehelper typ
       | TOption typ -> option_t @@ ehelper typ
-      | TRef typ -> ref_t @@ ehelper typ
       | ground -> ground
     in
     ehelper
@@ -173,8 +172,7 @@ end = struct
              let* subst = subst in
              compose head_sub subst)
            ~init:(return empty))
-    | TList typ1, TList typ2 | TOption typ1, TOption typ2 | TRef typ1, TRef typ2 ->
-      unify typ1 typ2
+    | TList typ1, TList typ2 | TOption typ1, TOption typ2 -> unify typ1 typ2
     | _ -> fail @@ `UnificationFailed (l, r)
 
   and extend k v s =
@@ -256,7 +254,7 @@ let rec is_restricted = function
     (match list with
      | a :: b -> is_restricted a || is_restricted (TTuple b)
      | [] -> false)
-  | TList t | TOption t | TRef t -> is_restricted t
+  | TList t | TOption t -> is_restricted t
   | TGround _ -> false
 ;;
 
@@ -303,7 +301,6 @@ let rec restrict = function
   | TArr (left, right) -> TArr (restrict left, restrict right)
   | TTuple lst -> TTuple (List.map lst ~f:(fun x -> restrict x))
   | TList typ -> TList (restrict typ)
-  | TRef typ -> TRef (restrict typ)
   | TOption typ -> TOption (restrict typ)
   | t -> t
 ;;
@@ -324,8 +321,7 @@ let get_args left right =
   | _ -> []
 ;;
 
-let rec get_name left =
-  match left with
+let rec get_name = function
   | EApp (l, _) -> get_name l
   | EVar name -> return name
   | _ -> fail `Not_function
@@ -506,30 +502,13 @@ let infer =
       let* subst_expr, typ_expr, _ = ehelper env' expression in
       let* final_subst = Subst.compose_all [ subst_expr; subst' ] in
       return (final_subst, typ_expr, env)
-    | EApp (EVar "!", EVar id) ->
-      let* subst, ttype, _ = lookup_env id env in
-      let* type_variable = fresh_var in
-      let* subst' = unify (ref_t type_variable) ttype in
-      let result_type = Subst.apply subst' type_variable in
-      let* final_subst = Subst.compose subst subst' in
-      return (final_subst, result_type, env)
-    | EApp (EVar "ref", right) ->
-      let* right_subst, right_type, _ = ehelper env right in
-      return (right_subst, ref_t right_type, env)
-    | EApp (EApp (EVar ":=", left), right) ->
-      let* left_subst, left_type, _ = ehelper env left in
-      let* right_subst, right_type, _ = ehelper env right in
-      let* subst' = unify left_type (ref_t right_type) in
-      let* final_subst = Subst.compose_all [ subst'; left_subst; right_subst ] in
-      return (final_subst, unit_typ, env)
     | EApp (left, right) ->
       let* subst_left, typ_left, _ = ehelper env left in
       let* subst_right, typ_right, _ = ehelper (TypeEnv.apply subst_left env) right in
       let* type_variable = fresh_var in
-      let get_typ res =
-        match res with
+      let get_typ = function
         | Ok (_, typ, _) -> typ
-        | _ -> unit_typ
+        | _ -> bool_typ
       in
       let args = get_args left right in
       let typ_checker x = run (ehelper (TypeEnv.apply subst_left env) x) in
@@ -551,6 +530,10 @@ let infer =
       let* subst, typ, _ = ehelper env' body in
       let result_type = arrow_t (Subst.apply subst type_variable) typ in
       return (subst, result_type, env)
+    | EFun (PtWild, body) ->
+      let* type_variable = fresh_var in
+      let* subst, typ, _ = ehelper env body in
+      return (subst, arrow_t type_variable typ, env)
     | EFun (_, _) -> fail `Unreachable
     | EIf (condition, true_branch, false_branch) ->
       let* condition_subst, condition_type, _ = ehelper env condition in
