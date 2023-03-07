@@ -290,10 +290,11 @@ module Interpret (M : MONAD_FAIL) = struct
     | EIf (exp1, exp2, exp3) ->
       run
         (eval_expr env exp1)
-        ~ok:(function
-          | BoolVal false -> eval_expr env exp3
-          | BoolVal true -> eval_expr env exp2
-          | _ -> fail (Not_bool_condition exp1))
+        ~ok:
+          (function
+           | BoolVal false -> eval_expr env exp3
+           | BoolVal true -> eval_expr env exp2
+           | _ -> fail (Not_bool_condition exp1))
         ~err:fail
     | EMatch (exp, mathchings) ->
       let* evaled = eval_expr env exp in
@@ -361,9 +362,10 @@ module Interpret (M : MONAD_FAIL) = struct
               | PtVar name ->
                 run
                   (lookup_env name basic)
-                  ~ok:(function
-                    | InternalVal -> return (EFun (pt, exp))
-                    | _ -> helper exp)
+                  ~ok:
+                    (function
+                     | InternalVal -> return (EFun (pt, exp))
+                     | _ -> helper exp)
                   ~err:(fun _ -> return (EFun (pt, exp)))
               | p -> fail (Wrong_arg_pat p))
            | e -> return e
