@@ -141,7 +141,7 @@
 % wildcard lambda argument test
   $ ./interpreter_test.exe << EOF
   > val r = fn _ => fn x => 2 * x;;
-  > val t = r "true" 4;;
+  > val t = r true 4;;
   val r = fn: 'a -> int -> int
   val t = 8: int
   _______
@@ -167,9 +167,9 @@
   > val before_applying = let in (fn x => fn z => (x, z)) end;;
   > val tmp = before_applying 4;;
   > val after_applying = before_applying;;
-  val before_applying = fn: '~B -> '~C -> ('~B * '~C)
-  val tmp = fn: '~A -> (int * '~A)
-  val after_applying = fn: int -> '~A -> (int * '~A)
+  val before_applying = fn: '~A -> '~B -> ('~A * '~B)
+  val tmp = fn: '~B -> (int * '~B)
+  val after_applying = fn: int -> '~B -> (int * '~B)
   _______
 
 % if else fn test inference
@@ -198,7 +198,7 @@
   > val before_applying = if 4 = 4 then fn x => fn y => [x, y] else fn x => fn y => [y, x];;
   > val tmp = before_applying "abc";;
   > val after_applying = before_applying;;
-  val before_applying = fn: '~C -> '~C -> '~C list
+  val before_applying = fn: '~D -> '~D -> '~D list
   val tmp = fn: string -> string list
   val after_applying = fn: string -> string -> string list
   _______
@@ -206,9 +206,9 @@
 % inference + interpreter test
   $ ./interpreter_test.exe << EOF
   > val x = fn t => if t >= 2 then SOME t else NONE;;
-  > val y = [(x 5), (x 1), (x 3)];;
+  > val y = [(x 5), (x 1), (x 3), (x 18)];;
   val x = fn: int -> int option
-  val y = [SOME 5, NONE, SOME 3]: int option list
+  val y = [SOME 5, NONE, SOME 3, SOME 18]: int option list
   _______
 
 % equality types inference test
