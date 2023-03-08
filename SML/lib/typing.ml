@@ -68,11 +68,9 @@ let rec pp_type fmt typ =
   | TList typ -> fprintf fmt (arrow_format typ ^^ " list") pp_type typ
   | TArr (typ_left, typ_right) ->
     fprintf fmt (arrow_format typ_left ^^ " -> %a") pp_type typ_left pp_type typ_right
+  | TOption typ -> fprintf fmt "%a option" pp_type typ
   | TVar (var, false) ->
     fprintf fmt "%s" @@ "'" ^ Char.escaped (Stdlib.Char.chr (var + 97))
-  | TOption typ ->
-    pp_type fmt typ;
-    fprintf fmt "%s" " option"
   | TEqualityVar (var, false) ->
     fprintf fmt "%s" @@ "''" ^ Char.escaped (Stdlib.Char.chr (var + 97))
   | TVar (var, true) ->
@@ -81,10 +79,7 @@ let rec pp_type fmt typ =
     fprintf fmt "%s" @@ "''~" ^ Char.escaped (Stdlib.Char.chr (var + 65))
 ;;
 
-let print_typ typ =
-  let s = Format.asprintf "%a" pp_type typ in
-  Format.printf "%s\n" s
-;;
+let print_typ typ = Format.printf "%a\n" pp_type typ
 
 let pp_error fmt (err : error) =
   let open Format in
@@ -93,15 +88,15 @@ let pp_error fmt (err : error) =
   | `NoVariable identifier ->
     fprintf fmt "Elaboration failed: Unbound value identifier %s" identifier
   | `UnificationFailed (t1, t2) ->
-    fprintf fmt "Elaboration failed: Rules disagree on type: Cannot merge ";
-    pp_type fmt t1;
-    fprintf fmt " and ";
-    pp_type fmt t2
+    fprintf
+      fmt
+      "Elaboration failed: Rules disagree on type: Cannot merge %a and %a"
+      pp_type
+      t1
+      pp_type
+      t2
   | `Unreachable -> fprintf fmt "Not reachable."
   | `Not_function -> fprintf fmt "Applying not a function"
 ;;
 
-let print_type_error error =
-  let s = Format.asprintf "%a" pp_error error in
-  Format.printf "%s\n" s
-;;
+let print_type_error error = Format.printf "%a\n" pp_error error

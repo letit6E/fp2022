@@ -69,22 +69,22 @@ module Interpret (M : MONAD_FAIL) = struct
     let open Format in
     let rec helper _ = function
       | NoneVal -> sprintf "NONE"
-      | SomeVal x -> "SOME " ^ helper std_formatter x
+      | SomeVal x -> sprintf "SOME %s" @@ helper std_formatter x
       | BoolVal b -> sprintf "%b" b
       | FunVal (_, _, _, _) -> sprintf "fn"
       | InternalVal -> sprintf "<internal>"
-      | IntVal n -> sprintf ((if n < 0 then "~" else "") ^^ "%d") (Int.abs n)
+      | IntVal n -> sprintf (if n < 0 then "~%d" else "%d") (Int.abs n)
       | TupleVal l ->
         let rec elems = function
           | [ hd ] -> helper std_formatter hd
-          | hd :: tail -> String.concat ", " [ helper std_formatter hd; elems tail ]
+          | hd :: tail -> sprintf "%s, %s" (helper std_formatter hd) (elems tail)
           | _ -> ""
         in
         sprintf "(%s)" (elems l)
       | ListVal l ->
         let rec elems = function
           | [ hd ] -> helper std_formatter hd
-          | hd :: tail -> String.concat ", " [ helper std_formatter hd; elems tail ]
+          | hd :: tail -> sprintf "%s, %s" (helper std_formatter hd) (elems tail)
           | _ -> ""
         in
         sprintf "[%s]" (elems l)
@@ -245,25 +245,22 @@ module Interpret (M : MONAD_FAIL) = struct
       (match pt with
        | PtVar id ->
          let new_state = exd_env id InternalVal env_b in
-         let new_list = keys_b @ [ id ] in
+         let new_list = id :: keys_b in
          efun env env_lab env_opt new_state new_list exp
-       | PtWild -> efun env env_lab env_opt empty_env [ "" ] exp
+       | PtWild -> efun env env_lab env_opt empty_env ("" :: keys_b) exp
        | p -> fail (Wrong_arg_pat p))
-    | _ -> return (Info (env_lab, env_opt, env_b, keys_b))
+    | _ -> return (Info (env_lab, env_opt, env_b, List.rev keys_b))
 
   and scan_app env = function
     | EApp (exp_h1, exp_h2) ->
       let* Info (lab, opt, basic, keys), fstate, body = scan_app env exp_h1 in
-      (match exp_h2 with
-       | EArg e ->
-         (match keys with
-          | hd :: tl ->
-            let* evaled = eval_expr env e in
-            let new_state = exd_env hd evaled fstate in
-            let new_basic = exd_env hd evaled basic in
-            return (Info (lab, opt, new_basic, tl), new_state, body)
-          | [] -> fail (Wrong_arg (EArg e)))
-       | e -> fail (Wrong_arg e))
+      (match keys with
+       | hd :: tl ->
+         let* evaled = eval_expr env exp_h2 in
+         let new_state = exd_env hd evaled fstate in
+         let new_basic = exd_env hd evaled basic in
+         return (Info (lab, opt, new_basic, tl), new_state, body)
+       | [] -> fail (Wrong_arg exp_h2))
     | EVar name ->
       let* evaled = eval_expr env (EVar name) in
       (match evaled with
@@ -277,7 +274,6 @@ module Interpret (M : MONAD_FAIL) = struct
     | ENil -> return (ListVal [])
     | EVar x -> run (lookup_env x env) ~ok:return ~err:fail
     | ENone -> return NoneVal
-    | EArg x -> eval_expr env x
     | EIf (exp1, exp2, exp3) ->
       run
         (eval_expr env exp1)
