@@ -52,7 +52,7 @@ module Subst : sig
 end
 
 module VarSet : sig
-  val fold_right : ('a -> 'b -> 'a R.t) -> 'a R.t -> ('b, 'c) Base.Set.t -> 'a R.t
+  val fold : ('a -> 'b -> 'a R.t) -> 'a R.t -> ('b, 'c) Base.Set.t -> 'a R.t
 end
 
 module Scheme : sig
