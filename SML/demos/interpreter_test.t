@@ -241,6 +241,18 @@
   Elaboration failed: Rules disagree on type: Cannot merge int -> int and ''d
   _______
 
+% fix factorial test
+  $ ./interpreter_test.exe << EOF
+  > val test = let
+  >     fun fix f x = f (fix f) x 
+  >     fun fact self n = if n = 0 then 1 else n * self (n - 1)
+  >     val function = fn n => fix fact n
+  > in
+  >     function 6
+  > end;;
+  val test = 720: int
+  _______
+
 
 % equality types and value restriction test inference test by Kakadu
   $ ./interpreter_test.exe << EOF
