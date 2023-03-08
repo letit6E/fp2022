@@ -300,9 +300,8 @@ let pack =
            ; brackets @@ d.exp d
            ]
     in
-    let arg = prim >>= (fun x -> return @@ x) >>= fun a -> return @@ EArg a in
     let some = token "SOME" *> prim >>= fun x -> return @@ ESome x in
-    let app_op = empty_lr @@ chainl1' prim arg eapp in
+    let app_op = empty_lr @@ chainl1' prim prim eapp in
     let app_or_some = app_op <|> some in
     let mul_op = procl (choice_op [ "*", Mul; "div", Div ]) app_or_some @@ d.key d in
     let add_op =

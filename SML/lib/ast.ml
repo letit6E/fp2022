@@ -22,7 +22,6 @@ type bin_op =
 and un_op =
   | Not (**  not  *)
   | Minus (** ~ *)
-[@@deriving show { with_path = false }]
 
 and binding = bool * pt * exp [@@deriving show { with_path = false }]
 and case = pt * exp [@@deriving show { with_path = false }]
@@ -47,7 +46,6 @@ and exp =
   | EFun of pt * exp (**   fn x => x   *)
   | EMatch of exp * case list (**    case x of 1 => 2 | _ => x * 1337    *)
   | ESome of exp (**    SOME a    *)
-  | EArg of exp (**    arg    *)
   | EIf of exp * exp * exp (**    if predicate then x else y    *)
   | EBinOp of bin_op * exp * exp (**    25 div (7 + ~2)    *)
   | EApp of exp * exp (**    fold a list init    *)

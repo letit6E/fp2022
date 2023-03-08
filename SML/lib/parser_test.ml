@@ -123,8 +123,7 @@ let%test _ =
               , EMatch
                   ( EVar "case"
                   , [ PtConst (CInt 0), EConst (CInt 1)
-                    ; ( PtWild
-                      , EApp (EVar "x", EArg (EBinOp (Sub, EVar "y", EConst (CInt 1)))) )
+                    ; PtWild, EApp (EVar "x", EBinOp (Sub, EVar "y", EConst (CInt 1)))
                     ] ) ) )
       ; DLet
           ( false
@@ -181,10 +180,10 @@ let%test _ =
                   , EBinOp
                       ( Mul
                       , EVar "n"
-                      , EApp (EVar "fact", EArg (EBinOp (Sub, EVar "n", EConst (CInt 1))))
-                      ) ) ) )
-      ; DLet (false, PtVar "x", EApp (EVar "fact", EArg (EConst (CInt 3))))
-      ; DLet (false, PtWild, EApp (EVar "fact", EArg (EConst (CInt 5))))
+                      , EApp (EVar "fact", EBinOp (Sub, EVar "n", EConst (CInt 1))) ) ) )
+          )
+      ; DLet (false, PtVar "x", EApp (EVar "fact", EConst (CInt 3)))
+      ; DLet (false, PtWild, EApp (EVar "fact", EConst (CInt 5)))
       ]
 ;;
 
@@ -206,10 +205,9 @@ let%test _ =
           , PtVar "x"
           , EApp
               ( EVar "f"
-              , EArg
-                  (ECons
-                     ( EConst (CInt 1)
-                     , ECons (EConst (CInt 2), ECons (EConst (CInt 3), ENil)) )) ) )
+              , ECons
+                  (EConst (CInt 1), ECons (EConst (CInt 2), ECons (EConst (CInt 3), ENil)))
+              ) )
       ; DLet
           ( false
           , PtVar "t"
@@ -251,15 +249,15 @@ let%test _ =
                   , EConst (CInt 1)
                   , EBinOp
                       ( Add
-                      , EApp (EVar "fib", EArg (EBinOp (Sub, EVar "n", EConst (CInt 1))))
-                      , EApp (EVar "fib", EArg (EBinOp (Sub, EVar "n", EConst (CInt 2))))
-                      ) ) ) )
+                      , EApp (EVar "fib", EBinOp (Sub, EVar "n", EConst (CInt 1)))
+                      , EApp (EVar "fib", EBinOp (Sub, EVar "n", EConst (CInt 2))) ) ) )
+          )
       ; DLet
           ( false
           , PtVar "tmp"
           , EApp
-              ( EApp (EApp (EVar "fib", EArg (EConst (CInt 15))), EArg (EConst (CInt 14)))
-              , EArg (EConst (CInt 3)) ) )
+              ( EApp (EApp (EVar "fib", EConst (CInt 15)), EConst (CInt 14))
+              , EConst (CInt 3) ) )
       ; DLet
           ( false
           , PtVar "tmp"
@@ -271,8 +269,8 @@ let%test _ =
                       , EFun
                           ( PtVar "x"
                           , EIf
-                              ( EBinOp (Eq, EApp (EVar "f", EArg (EVar "x")), EVar "x")
-                              , EApp (EVar "f", EArg (EVar "x"))
+                              ( EBinOp (Eq, EApp (EVar "f", EVar "x"), EVar "x")
+                              , EApp (EVar "f", EVar "x")
                               , EVar "x" ) ) ) )
                 ]
               , EVar "check" ) )
@@ -298,8 +296,8 @@ let%test _ =
           ( false
           , PtVar "ans"
           , EApp
-              ( EApp (EVar "g", EArg (EConst (CInt (-100))))
-              , EArg (EBinOp (Add, EConst (CInt 200), EConst (CInt 100))) ) )
+              ( EApp (EVar "g", EConst (CInt (-100)))
+              , EBinOp (Add, EConst (CInt 200), EConst (CInt 100)) ) )
       ; DLet
           ( false
           , PtVar "x"
@@ -343,10 +341,8 @@ let%test _ =
                   , PtVar "x"
                   , EFun (PtVar "y", EFun (PtVar "z", EBinOp (Add, EVar "y", EVar "z"))) )
                 ]
-              , EBinOp
-                  ( Add
-                  , EVar "t"
-                  , EApp (EApp (EVar "x", EArg (EVar "t")), EArg (EConst (CInt 4))) ) ) )
+              , EBinOp (Add, EVar "t", EApp (EApp (EVar "x", EVar "t"), EConst (CInt 4)))
+              ) )
       ; DLet
           (false, PtVar "t", ETuple [ EConst (CInt 1); EConst (CInt 2); EConst (CInt 3) ])
       ; DLet
