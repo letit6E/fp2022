@@ -101,7 +101,6 @@ val lookup_env
 val find_identifiers : Ast.pt -> (string, Base.String.comparator_witness) Base.Set.t
 val restrict : Typing.typ -> Typing.typ
 val check_restrict : Ast.exp -> Typing.typ -> Typing.typ
-val get_args : Ast.exp -> Ast.exp -> Ast.exp list
 val get_name : Ast.exp -> string R.t
 val infer : TypeEnv.t -> Ast.exp -> (Subst.t * Typing.typ * TypeEnv.t) R.t
 

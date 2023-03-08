@@ -311,16 +311,6 @@ let check_restrict exp typ =
   | _ -> typ
 ;;
 
-let get_args left right =
-  let rec unpack_app acc = function
-    | EApp (l, r) -> unpack_app (r :: acc) l
-    | _ -> acc
-  in
-  match unpack_app [ right ] left with
-  | _ :: tail -> tail
-  | _ -> []
-;;
-
 let rec get_name = function
   | EApp (l, _) -> get_name l
   | EVar name -> return name
@@ -495,25 +485,29 @@ let infer =
       let* final_subst = Subst.compose subst' subst_expr in
       return (final_subst, typ_expr, env)
     | EApp (left, right) ->
+      let* fn_name = get_name left in
       let* subst_left, typ_left, _ = ehelper env left in
       let* subst_right, typ_right, _ = ehelper (TypeEnv.apply subst_left env) right in
       let* type_variable = fresh_var in
-      let get_typ = function
-        | Ok (_, typ, _) -> typ
-        | _ -> bool_typ
-      in
-      let args = get_args left right in
-      let typ_checker x = run (ehelper (TypeEnv.apply subst_left env) x) in
-      let args_typs = List.map args ~f:(fun x -> get_typ (typ_checker x)) in
-      let new_typ = List.fold args_typs ~init:typ_right ~f:(fun acc x -> TArr (acc, x)) in
       let* subst' =
         unify (arrow_t typ_right type_variable) (Subst.apply subst_right typ_left)
       in
-      let* fn_name = get_name left in
       let result_type = Subst.apply subst' type_variable in
+      let get_typ = function
+        | Ok (_, typ, _) -> return typ
+        | _ -> fail `Unreachable
+      in
+      let rec construct_typ acc = function
+        | EApp (l, r) ->
+          let* next_typ = get_typ @@ run @@ ehelper (TypeEnv.apply subst_left env) r in
+          construct_typ (TArr (acc, next_typ)) l
+        | _ -> return @@ TArr (acc, result_type)
+      in
+      let* new_typ' = construct_typ typ_right left in
       let* final_subst = Subst.compose_all [ subst_left; subst_right; subst' ] in
-      let new_final_typ = restrict (TArr (new_typ, result_type)) in
-      let new_env' = TypeEnv.extend env fn_name (Set.empty (module Int), new_final_typ) in
+      let new_env' =
+        TypeEnv.extend env fn_name (Set.empty (module Int), restrict new_typ')
+      in
       let new_env = if is_restricted typ_left then new_env' else env in
       return (final_subst, result_type, new_env)
     | EFun (PtVar head, body) ->
