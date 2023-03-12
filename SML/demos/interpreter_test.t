@@ -122,12 +122,22 @@
   val res = 15: int
   _______
 
-% not equality type test
+% equality type test
   $ ./interpreter_test.exe << EOF
   > val x = SOME 15;;
   > val y = x;;
   > val check = x = y;;
-  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type option and option
+  val x = SOME 15: int option
+  val y = SOME 15: int option
+  val check = true: bool
+  _______
+
+% not equality type test
+  $ ./interpreter_test.exe << EOF
+  > val x = fn x => x;;
+  > val y = x;;
+  > val check = x = y;;
+  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type fn and fn
   _______
 
 % unary operator inference test
@@ -138,11 +148,27 @@
   val minus = fn: int -> int
   _______
 
+% option none equality test
+  $ ./interpreter_test.exe << EOF
+  > val f = fn t => if t = 4 then NONE else SOME 5;;
+  > val ft = fn t => if t = 4 then NONE else SOME "5";;
+  > val check = f 4 = ft 4;;
+  Elaboration failed: Rules disagree on type: Cannot merge string and int
+  _______
+
+% option some equality test
+  $ ./interpreter_test.exe << EOF
+  > val f = fn t => if t = 4 then NONE else SOME 5;;
+  > val ft = fn t => if t = 4 then NONE else SOME "5";;
+  > val check = f 5 = ft 5;;
+  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type int and string
+  _______
+
 % wildcard lambda argument test
   $ ./interpreter_test.exe << EOF
-  > val r = fn _ => fn x => 2 * x;;
-  > val t = r true 4;;
-  val r = fn: 'a -> int -> int
+  > val r = fn _ => fn x => fn _ => 2 * x;;
+  > val t = r true 4 "abc";;
+  val r = fn: 'a -> int -> 'c -> int
   val t = 8: int
   _______
 
