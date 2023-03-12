@@ -22,8 +22,7 @@ Author: Shangareev Rustam, rustam.letitbe@gmail.com
 
 ### Mini-language supports
 
-- Int, String, Bool, Tuple, List, Unit types
-- Option and Ref types
+- Int, String, Bool, Tuple, List, Option types
 - Functions, lambda functions, recursive functions
 - Generic types, equality types, restricted generic and equality values
 - Binary and unary operators, pattern matching, let...in binding, if statements
