@@ -10,9 +10,6 @@ type ground_type =
   | Int
   | Bool
 
-val pp_ground_type : Format.formatter -> ground_type -> unit
-val show_ground_type : ground_type -> string
-
 type typ =
   | TVar of type_variable_number * bool
   | TEqualityVar of type_variable_number * bool
