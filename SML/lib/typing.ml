@@ -9,7 +9,6 @@ type ground_type =
   | String
   | Int
   | Bool
-[@@deriving show { with_path = false }]
 
 type typ =
   | TVar of type_variable_number * bool (** 'a, '~A : bool for restricted value *)

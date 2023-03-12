@@ -17,22 +17,20 @@ type bin_op =
   | Sub (**  -   *)
   | Mul (**  *   *)
   | Div (**  div   *)
-[@@deriving show { with_path = false }]
 
 and un_op =
   | Not (**  not  *)
   | Minus (** ~ *)
 
-and binding = bool * pt * exp [@@deriving show { with_path = false }]
-and case = pt * exp [@@deriving show { with_path = false }]
-and decl = DLet of binding (**  val y = 256   *) [@@deriving show { with_path = false }]
-and prog = decl list [@@deriving show { with_path = false }]
+and binding = bool * pt * exp
+and case = pt * exp
+and decl = DLet of binding (**  val y = 256   *)
+and prog = decl list
 
 and const =
   | CString of string (**  "xyz"  *)
   | CInt of int (**   256    *)
   | CBool of bool (**  false   *)
-[@@deriving show { with_path = false }]
 
 and exp =
   | EConst of const (**    false    *)
@@ -49,7 +47,6 @@ and exp =
   | EIf of exp * exp * exp (**    if predicate then x else y    *)
   | EBinOp of bin_op * exp * exp (**    25 div (7 + ~2)    *)
   | EApp of exp * exp (**    fold a list init    *)
-[@@deriving show { with_path = false }]
 
 and pt =
   | PtWild (**  _  *)
