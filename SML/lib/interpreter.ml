@@ -42,7 +42,6 @@ type exval =
   | IntVal of int
   | StringVal of string
   | BoolVal of bool
-  | InternalVal
 [@@deriving show { with_path = false }]
 
 and error =
@@ -60,7 +59,7 @@ and error =
 [@@deriving show { with_path = false }]
 
 and env = exval EnvrMap.t [@@deriving show { with_path = false }]
-and scan_info = Info of env * env * env * id list
+and scan_info = Info of env * id list
 
 module Interpret (M : MONAD_FAIL) = struct
   open M
@@ -72,7 +71,6 @@ module Interpret (M : MONAD_FAIL) = struct
       | SomeVal x -> sprintf "SOME %s" @@ helper std_formatter x
       | BoolVal b -> sprintf "%b" b
       | FunVal (_, _, _, _) -> sprintf "fn"
-      | InternalVal -> sprintf "<internal>"
       | IntVal n -> sprintf (if n < 0 then "~%d" else "%d") (Int.abs n)
       | TupleVal l ->
         let rec elems = function
@@ -101,7 +99,6 @@ module Interpret (M : MONAD_FAIL) = struct
     | IntVal _ -> "int"
     | StringVal _ -> "string"
     | BoolVal _ -> "bool"
-    | InternalVal -> "internal"
   ;;
 
   let pp_error e =
@@ -195,13 +192,14 @@ module Interpret (M : MONAD_FAIL) = struct
     | a, b -> fail (Match_fail (a, b))
   ;;
 
-  let apply_bin_op op x y =
+  let rec apply_bin_op op x y =
     match op, x, y with
     | Eq, IntVal x, IntVal y -> return (BoolVal (x == y))
     | Eq, StringVal x, StringVal y -> return (BoolVal (x == y))
     | Eq, BoolVal x, BoolVal y -> return (BoolVal (x == y))
     | Eq, TupleVal x, TupleVal y -> return (BoolVal (x == y))
     | Eq, ListVal x, ListVal y -> return (BoolVal (x == y))
+    | Eq, NoneVal, NoneVal -> return (BoolVal true)
     | Neq, IntVal x, IntVal y -> return (BoolVal (x != y))
     | Neq, StringVal x, StringVal y -> return (BoolVal (x != y))
     | Neq, BoolVal x, BoolVal y -> return (BoolVal (x != y))
@@ -230,6 +228,7 @@ module Interpret (M : MONAD_FAIL) = struct
     | Div, IntVal x, IntVal y -> return (IntVal (x / y))
     | Sub, IntVal x, IntVal y -> return (IntVal (x - y))
     | Add, IntVal x, IntVal y -> return (IntVal (x + y))
+    | Eq, SomeVal x, SomeVal y -> apply_bin_op Eq x y
     | a, b, c -> fail (Wrong_bin_op (a, b, c))
   ;;
 
@@ -240,33 +239,30 @@ module Interpret (M : MONAD_FAIL) = struct
     | a, b -> fail (Wrong_un_op (a, b))
   ;;
 
-  let rec efun env env_lab env_opt env_b keys_b = function
+  let rec efun env env_b keys_b = function
     | EFun (pt, exp) ->
       (match pt with
-       | PtVar id ->
-         let new_state = exd_env id InternalVal env_b in
-         let new_list = id :: keys_b in
-         efun env env_lab env_opt new_state new_list exp
-       | PtWild -> efun env env_lab env_opt empty_env ("" :: keys_b) exp
+       | PtVar id -> efun env env_b (id :: keys_b) exp
+       | PtWild -> efun env env_b ("" :: keys_b) exp
        | p -> fail (Wrong_arg_pat p))
-    | _ -> return (Info (env_lab, env_opt, env_b, List.rev keys_b))
+    | _ -> return (Info (env_b, List.rev keys_b))
 
   and scan_app env = function
     | EApp (exp_h1, exp_h2) ->
-      let* Info (lab, opt, basic, keys), fstate, body = scan_app env exp_h1 in
+      let* Info (basic, keys), fstate, body = scan_app env exp_h1 in
       (match keys with
        | hd :: tl ->
          let* evaled = eval_expr env exp_h2 in
          let new_state = exd_env hd evaled fstate in
          let new_basic = exd_env hd evaled basic in
-         return (Info (lab, opt, new_basic, tl), new_state, body)
+         return (Info (new_basic, tl), new_state, body)
        | [] -> fail (Wrong_arg exp_h2))
     | EVar name ->
       let* evaled = eval_expr env (EVar name) in
       (match evaled with
-       | FunVal (_, body, fstate, Info (lab, opt, basic, keys)) ->
+       | FunVal (_, body, fstate, Info (basic, keys)) ->
          let fstate = Lazy.force fstate in
-         return (Info (lab, opt, basic, keys), fstate, body)
+         return (Info (basic, keys), fstate, body)
        | _ -> fail (Not_function (EVar name)))
     | e -> fail (Not_function e)
 
@@ -321,30 +317,23 @@ module Interpret (M : MONAD_FAIL) = struct
     | ETuple exps ->
       M.all (List.map (eval_expr env) exps) >>= fun x -> return (TupleVal x)
     | EApp (exp1, exp2) ->
-      let* Info (lab, opt, basic, keys), new_state, body =
-        scan_app env (EApp (exp1, exp2))
-      in
-      let new_state = EnvrMap.union (fun _ _ y -> Some y) opt new_state in
+      let* Info (basic, keys), new_state, body = scan_app env (EApp (exp1, exp2)) in
+      let new_state = EnvrMap.union (fun _ _ y -> Some y) empty_env new_state in
       let rec helper = function
         | EFun (pt, exp) ->
           (match pt with
            | PtVar name ->
              run
                (lookup_env name basic)
-               ~ok:
-                 (function
-                  | InternalVal -> return (EFun (pt, exp))
-                  | _ -> helper exp)
+               ~ok:(fun _ -> helper exp)
                ~err:(fun _ -> return (EFun (pt, exp)))
-           | PtWild -> return (EFun (pt, exp))
+           | PtWild -> helper exp
            | p -> fail (Wrong_arg_pat p))
         | e -> return e
       in
       let* body = helper body in
       (match body with
-       | EFun (pt, exp) ->
-         let tmp = FunVal (pt, exp, lazy new_state, Info (lab, opt, basic, keys)) in
-         return tmp
+       | EFun (pt, exp) -> return @@ FunVal (pt, exp, lazy new_state, Info (basic, keys))
        | _ -> eval_expr new_state body)
     | ECons (exp1, exp2) ->
       let* evaled_exp1 = eval_expr env exp1 in
@@ -353,7 +342,7 @@ module Interpret (M : MONAD_FAIL) = struct
        | ListVal list -> return (ListVal (evaled_exp1 :: list))
        | x -> return (ListVal [ evaled_exp1; x ]))
     | EFun (pt, exp) ->
-      let* scan_info = efun env empty_env empty_env empty_env [] (EFun (pt, exp)) in
+      let* scan_info = efun env empty_env [] (EFun (pt, exp)) in
       return (FunVal (pt, exp, lazy env, scan_info))
 
   and eval_bind env (is_rec, pt, exp) =
@@ -372,7 +361,7 @@ module Interpret (M : MONAD_FAIL) = struct
       let* tmp =
         match exp with
         | EFun (pt, body) ->
-          let* scan_info = efun env empty_env empty_env empty_env [] (EFun (pt, body)) in
+          let* scan_info = efun env empty_env [] (EFun (pt, body)) in
           let rec new_env =
             lazy (exd_env id (FunVal (pt, body, new_env, scan_info)) env)
           in
