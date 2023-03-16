@@ -6,7 +6,7 @@ description:
 maintainer: ["https://github.com/letit6E"]
 authors: ["Shangareev Rustam"]
 license: "LGPL-3.0-or-later"
-tags: ["SML" "interpreter" "parser"]
+tags: ["SML" "interpreter" "parser" "type" "inference"]
 homepage: "https://github.com/letit6E/fp2022"
 bug-reports: "https://github.com/letit6E/fp2022"
 depends: [

@@ -49,16 +49,14 @@
   > val bool = true;;
   > val string = "Hello World!";;
   > val list = [3, 1, 15, 7];;
-  > val rf = ref 15;;
-  > val option = SOME rf;;
-  > val tuple = (string, bool, int, list, rf, option);;
+  > val option = SOME (1, false);;
+  > val tuple = (string, bool, int, list, option);;
   val int = 3: int
   val bool = true: bool
   val string = "Hello World!": string
   val list = [3, 1, 15, 7]: int list
-  val rf = 15: int ref
-  val option = SOME 15: int ref option
-  val tuple = ("Hello World!", true, 3, [3, 1, 15, 7], 15, SOME 15): (string * bool * int * int list * int ref * int ref option)
+  val option = SOME (1, false): (int * bool) option
+  val tuple = ("Hello World!", true, 3, [3, 1, 15, 7], SOME (1, false)): (string * bool * int * int list * (int * bool) option)
   _______
 
 % some constructors test
@@ -78,47 +76,6 @@
   >     t + x t 4
   >   end;;
   val test = 10: int
-  _______
-
-% ref test and wildcard not printing test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "test";;
-  > val _ = x := "error";;
-  > val tmp = x;;
-  val x = "test": string ref
-  val tmp = "error": string ref
-  _______
-
-% unit type test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "heh";;
-  > val unit = x := "lol";;
-  val x = "heh": string ref
-  val unit = (): unit
-  _______
-
-% ref type property test and wildcard not printing test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "abc";;
-  > val _ = x := "xyz";;
-  > val tmp = x;;
-  > val _ = tmp := "stop";;
-  > val check = (tmp, x);;
-  val x = "abc": string ref
-  val tmp = "xyz": string ref
-  val check = ("stop", "stop"): (string ref * string ref)
-  _______
-
-% dereference test
-  $ ./interpreter_test.exe << EOF
-  > val x = ref "abc";;
-  > val derefer = !x;;
-  > val assign = x := "test";;
-  > val result = (derefer, x);;
-  val x = "abc": string ref
-  val derefer = "abc": string
-  val assign = (): unit
-  val result = ("abc", "test"): (string * string ref)
   _______
 
 % factorial test
@@ -165,12 +122,22 @@
   val res = 15: int
   _______
 
-% ref not equality type test
+% equality type test
   $ ./interpreter_test.exe << EOF
-  > val x = ref "abc";;
+  > val x = SOME 15;;
   > val y = x;;
   > val check = x = y;;
-  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type ref and ref
+  val x = SOME 15: int option
+  val y = SOME 15: int option
+  val check = true: bool
+  _______
+
+% not equality type test
+  $ ./interpreter_test.exe << EOF
+  > val x = fn x => x;;
+  > val y = x;;
+  > val check = x = y;;
+  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type fn and fn
   _______
 
 % unary operator inference test
@@ -179,6 +146,30 @@
   > val minus = fn x => ~x;;
   val r = fn: bool -> bool
   val minus = fn: int -> int
+  _______
+
+% option none equality test
+  $ ./interpreter_test.exe << EOF
+  > val f = fn t => if t = 4 then NONE else SOME 5;;
+  > val ft = fn t => if t = 4 then NONE else SOME "5";;
+  > val check = f 4 = ft 4;;
+  Elaboration failed: Rules disagree on type: Cannot merge string and int
+  _______
+
+% option some equality test
+  $ ./interpreter_test.exe << EOF
+  > val f = fn t => if t = 4 then NONE else SOME 5;;
+  > val ft = fn t => if t = 4 then NONE else SOME "5";;
+  > val check = f 5 = ft 5;;
+  Elaboration failed: Type clash. Binary Eq operator cannot take arguments of type int and string
+  _______
+
+% wildcard lambda argument test
+  $ ./interpreter_test.exe << EOF
+  > val r = fn _ => fn x => fn _ => 2 * x;;
+  > val t = r true 4 "abc";;
+  val r = fn: 'a -> int -> 'c -> int
+  val t = 8: int
   _______
 
 % pattern matching, asteriks, equality inference test
@@ -202,9 +193,9 @@
   > val before_applying = let in (fn x => fn z => (x, z)) end;;
   > val tmp = before_applying 4;;
   > val after_applying = before_applying;;
-  val before_applying = fn: '~B -> '~C -> ('~B * '~C)
-  val tmp = fn: '~A -> (int * '~A)
-  val after_applying = fn: int -> '~A -> (int * '~A)
+  val before_applying = fn: '~A -> '~B -> ('~A * '~B)
+  val tmp = fn: '~B -> (int * '~B)
+  val after_applying = fn: int -> '~B -> (int * '~B)
   _______
 
 % if else fn test inference
@@ -233,7 +224,7 @@
   > val before_applying = if 4 = 4 then fn x => fn y => [x, y] else fn x => fn y => [y, x];;
   > val tmp = before_applying "abc";;
   > val after_applying = before_applying;;
-  val before_applying = fn: '~C -> '~C -> '~C list
+  val before_applying = fn: '~D -> '~D -> '~D list
   val tmp = fn: string -> string list
   val after_applying = fn: string -> string -> string list
   _______
@@ -241,9 +232,9 @@
 % inference + interpreter test
   $ ./interpreter_test.exe << EOF
   > val x = fn t => if t >= 2 then SOME t else NONE;;
-  > val y = [(x 5), (x 1), (x 3)];;
+  > val y = [(x 5), (x 1), (x 3), (x 18)];;
   val x = fn: int -> int option
-  val y = [SOME 5, NONE, SOME 3]: int option list
+  val y = [SOME 5, NONE, SOME 3, SOME 18]: int option list
   _______
 
 % equality types inference test
@@ -274,6 +265,18 @@
   > fun f x y = if x = y then (NONE, SOME x) else (NONE, NONE);;
   > val result = f (fn x => 2 * x);;
   Elaboration failed: Rules disagree on type: Cannot merge int -> int and ''d
+  _______
+
+% fix factorial test
+  $ ./interpreter_test.exe << EOF
+  > val test = let
+  >     fun fix f x = f (fix f) x 
+  >     fun fact self n = if n = 0 then 1 else n * self (n - 1)
+  >     val function = fn n => fix fact n
+  > in
+  >     function 6
+  > end;;
+  val test = 720: int
   _______
 
 

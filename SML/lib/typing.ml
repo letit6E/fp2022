@@ -9,8 +9,6 @@ type ground_type =
   | String
   | Int
   | Bool
-  | Unit
-[@@deriving show { with_path = false }]
 
 type typ =
   | TVar of type_variable_number * bool (** 'a, '~A : bool for restricted value *)
@@ -19,20 +17,17 @@ type typ =
   | TArr of typ * typ (** string -> int *)
   | TTuple of typ list (** int * int *)
   | TList of typ (** 'a list *)
-  | TRef of typ (** ref x *)
   | TOption of typ (** (int, string) Result *)
   | TGround of ground_type (** int *)
 
 (* Ground types *)
 let string_typ = TGround String
 let int_typ = TGround Int
-let unit_typ = TGround Unit
 let bool_typ = TGround Bool
 let var_t n = TVar (n, false)
 let eqvar_t n = TEqualityVar (n, false)
 let val_t n = TVar (n, true)
 let eqval_t n = TEqualityVar (n, true)
-let ref_t t = TRef t
 let arrow_t left_type right_type = TArr (left_type, right_type)
 let tuple_t type_list = TTuple type_list
 let option_t typ = TOption typ
@@ -59,8 +54,7 @@ let rec pp_type fmt typ =
     (match x with
      | Int -> fprintf fmt "int"
      | String -> fprintf fmt "string"
-     | Bool -> fprintf fmt "bool"
-     | Unit -> fprintf fmt "unit")
+     | Bool -> fprintf fmt "bool")
   | TTuple value_list ->
     fprintf
       fmt
@@ -73,26 +67,18 @@ let rec pp_type fmt typ =
   | TList typ -> fprintf fmt (arrow_format typ ^^ " list") pp_type typ
   | TArr (typ_left, typ_right) ->
     fprintf fmt (arrow_format typ_left ^^ " -> %a") pp_type typ_left pp_type typ_right
+  | TOption typ -> fprintf fmt "%a option" pp_type typ
   | TVar (var, false) ->
     fprintf fmt "%s" @@ "'" ^ Char.escaped (Stdlib.Char.chr (var + 97))
-  | TOption typ ->
-    pp_type fmt typ;
-    fprintf fmt "%s" " option"
   | TEqualityVar (var, false) ->
     fprintf fmt "%s" @@ "''" ^ Char.escaped (Stdlib.Char.chr (var + 97))
-  | TRef typ ->
-    pp_type fmt typ;
-    fprintf fmt "%s" " ref"
   | TVar (var, true) ->
     fprintf fmt "%s" @@ "'~" ^ Char.escaped (Stdlib.Char.chr (var + 65))
   | TEqualityVar (var, true) ->
     fprintf fmt "%s" @@ "''~" ^ Char.escaped (Stdlib.Char.chr (var + 65))
 ;;
 
-let print_typ typ =
-  let s = Format.asprintf "%a" pp_type typ in
-  Format.printf "%s\n" s
-;;
+let print_typ typ = Format.printf "%a\n" pp_type typ
 
 let pp_error fmt (err : error) =
   let open Format in
@@ -101,15 +87,15 @@ let pp_error fmt (err : error) =
   | `NoVariable identifier ->
     fprintf fmt "Elaboration failed: Unbound value identifier %s" identifier
   | `UnificationFailed (t1, t2) ->
-    fprintf fmt "Elaboration failed: Rules disagree on type: Cannot merge ";
-    pp_type fmt t1;
-    fprintf fmt " and ";
-    pp_type fmt t2
+    fprintf
+      fmt
+      "Elaboration failed: Rules disagree on type: Cannot merge %a and %a"
+      pp_type
+      t1
+      pp_type
+      t2
   | `Unreachable -> fprintf fmt "Not reachable."
   | `Not_function -> fprintf fmt "Applying not a function"
 ;;
 
-let print_type_error error =
-  let s = Format.asprintf "%a" pp_error error in
-  Format.printf "%s\n" s
-;;
+let print_type_error error = Format.printf "%a\n" pp_error error

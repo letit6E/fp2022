@@ -2,7 +2,9 @@
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 
-type id = string [@@deriving show { with_path = false }]
+type id = string
+
+val pp_id : Format.formatter -> id -> unit
 
 type bin_op =
   | And (**  and *)
@@ -57,4 +59,12 @@ and pt =
   | PtNone (**  NONE  *)
   | PtNil (**  []  *)
   | PtTuple of pt list (**  x, y, z   *)
-[@@deriving show { with_path = false }]
+
+val pp_bin_op : Format.formatter -> bin_op -> unit
+val show_bin_op : bin_op -> string
+val pp_un_op : Format.formatter -> un_op -> unit
+val show_un_op : un_op -> string
+val show_prog : prog -> string
+val pp_exp : Format.formatter -> exp -> unit
+val show_exp : exp -> string
+val pp_pt : Format.formatter -> pt -> unit

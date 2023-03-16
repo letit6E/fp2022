@@ -76,7 +76,7 @@ module Type = struct
   let rec occurs_in v = function
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> List.exists typ_list ~f:(occurs_in v)
-    | TList typ | TOption typ | TRef typ -> occurs_in v typ
+    | TList typ | TOption typ -> occurs_in v typ
     | _ -> false
   ;;
 
@@ -87,7 +87,7 @@ module Type = struct
       | TArr (left, right) -> ehelper (ehelper acc left) right
       | TTuple typ_list ->
         List.fold_right typ_list ~f:(fun t s -> Set.union s (ehelper empty t)) ~init:acc
-      | TList typ | TOption typ | TRef typ -> ehelper acc typ
+      | TList typ | TOption typ -> ehelper acc typ
       | TGround _ | TEqualityVar _ -> acc
     in
     ehelper empty
@@ -143,7 +143,6 @@ end = struct
       | TTuple typ_list -> tuple_t @@ List.map typ_list ~f:ehelper
       | TList typ -> list_t @@ ehelper typ
       | TOption typ -> option_t @@ ehelper typ
-      | TRef typ -> ref_t @@ ehelper typ
       | ground -> ground
     in
     ehelper
@@ -173,8 +172,7 @@ end = struct
              let* subst = subst in
              compose head_sub subst)
            ~init:(return empty))
-    | TList typ1, TList typ2 | TOption typ1, TOption typ2 | TRef typ1, TRef typ2 ->
-      unify typ1 typ2
+    | TList typ1, TList typ2 | TOption typ1, TOption typ2 -> unify typ1 typ2
     | _ -> fail @@ `UnificationFailed (l, r)
 
   and extend k v s =
@@ -200,8 +198,8 @@ end = struct
 end
 
 module VarSet = struct
-  let fold_right f ini set =
-    Set.fold_right set ~init:ini ~f:(fun x acc ->
+  let fold f ini set =
+    Set.fold set ~init:ini ~f:(fun acc x ->
       let open R.Syntax in
       let* acc = acc in
       f acc x)
@@ -256,13 +254,13 @@ let rec is_restricted = function
     (match list with
      | a :: b -> is_restricted a || is_restricted (TTuple b)
      | [] -> false)
-  | TList t | TOption t | TRef t -> is_restricted t
+  | TList t | TOption t -> is_restricted t
   | TGround _ -> false
 ;;
 
 let instantiate : scheme -> typ R.t =
  fun (set, t) ->
-  VarSet.fold_right
+  VarSet.fold
     (fun typ name ->
       let* f = if is_restricted typ then fresh_val else fresh_var in
       let* s = Subst.singleton name f in
@@ -301,9 +299,8 @@ let rec restrict = function
   | TVar (n, false) -> TVar (n, true)
   | TEqualityVar (n, false) -> TEqualityVar (n, true)
   | TArr (left, right) -> TArr (restrict left, restrict right)
-  | TTuple lst -> TTuple (List.map lst ~f:(fun x -> restrict x))
+  | TTuple lst -> TTuple (List.map lst ~f:restrict)
   | TList typ -> TList (restrict typ)
-  | TRef typ -> TRef (restrict typ)
   | TOption typ -> TOption (restrict typ)
   | t -> t
 ;;
@@ -314,18 +311,7 @@ let check_restrict exp typ =
   | _ -> typ
 ;;
 
-let get_args left right =
-  let rec unpack_app acc = function
-    | EApp (l, r) -> unpack_app (r :: acc) l
-    | _ -> acc
-  in
-  match unpack_app [ right ] left with
-  | _ :: tail -> tail
-  | _ -> []
-;;
-
-let rec get_name left =
-  match left with
+let rec get_name = function
   | EApp (l, _) -> get_name l
   | EVar name -> return name
   | _ -> fail `Not_function
@@ -386,7 +372,6 @@ let infer =
        | CInt _ -> return (Subst.empty, int_typ, env)
        | CString _ -> return (Subst.empty, string_typ, env)
        | CBool _ -> return (Subst.empty, bool_typ, env))
-    | EArg exp -> ehelper env exp
     | EVar identifier -> lookup_env identifier env
     | ENil ->
       let* fresh_var = fresh_var in
@@ -448,13 +433,7 @@ let infer =
     | ECons (elem, list) ->
       let* elem_subst, elem_type, _ = ehelper env elem in
       let* list_subst, list_type, _ = ehelper env list in
-      let* subst' =
-        unify
-          (list_t elem_type)
-          (match list with
-           | ENil -> list_t elem_type
-           | _ -> list_type)
-      in
+      let* subst' = unify (list_t elem_type) list_type in
       let* final_subst = Subst.compose_all [ elem_subst; list_subst; subst' ] in
       return (final_subst, Subst.apply subst' (list_t elem_type), env)
     | EMatch (matched_expression, case_list) ->
@@ -484,65 +463,51 @@ let infer =
       return (subst', Subst.apply final_subst head_expression_type, env)
     | ELet (bindings_list, expression) ->
       let rec process_list subst env = function
-        | [] ->
-          let* _ = fresh_var in
-          return (subst, env)
+        | [] -> return (subst, env)
         | elem :: tail ->
           let* identifier, exp =
             match elem with
-            | _, PtVar id, expr -> return (id, expr)
+            | _, PtVar id, exp -> return (id, exp)
             | _ -> fail `Unreachable
           in
-          let* fresh_var = fresh_var in
-          let env' = TypeEnv.extend env identifier (Set.empty (module Int), fresh_var) in
-          let* elem_subst, elem_type', _ = ehelper env' exp in
-          let elem_type = elem_type' in
+          let* fresh_var = fresh_val in
+          let env' =
+            TypeEnv.extend env identifier (Base.Set.empty (module Base.Int), fresh_var)
+          in
+          let* elem_subst, elem_typ, _ = ehelper env' exp in
           let env'' = TypeEnv.apply elem_subst env' in
-          let generalized_type = generalize env'' elem_type in
+          let generalized_type = generalize env'' elem_typ in
           let* subst'' = Subst.compose subst elem_subst in
           process_list subst'' (TypeEnv.extend env'' identifier generalized_type) tail
       in
       let* subst', env' = process_list Subst.empty env bindings_list in
       let* subst_expr, typ_expr, _ = ehelper env' expression in
-      let* final_subst = Subst.compose_all [ subst_expr; subst' ] in
+      let* final_subst = Subst.compose subst' subst_expr in
       return (final_subst, typ_expr, env)
-    | EApp (EVar "!", EVar id) ->
-      let* subst, ttype, _ = lookup_env id env in
-      let* type_variable = fresh_var in
-      let* subst' = unify (ref_t type_variable) ttype in
-      let result_type = Subst.apply subst' type_variable in
-      let* final_subst = Subst.compose subst subst' in
-      return (final_subst, result_type, env)
-    | EApp (EVar "ref", right) ->
-      let* right_subst, right_type, _ = ehelper env right in
-      return (right_subst, ref_t right_type, env)
-    | EApp (EApp (EVar ":=", left), right) ->
-      let* left_subst, left_type, _ = ehelper env left in
-      let* right_subst, right_type, _ = ehelper env right in
-      let* subst' = unify left_type (ref_t right_type) in
-      let* final_subst = Subst.compose_all [ subst'; left_subst; right_subst ] in
-      return (final_subst, unit_typ, env)
     | EApp (left, right) ->
+      let* fn_name = get_name left in
       let* subst_left, typ_left, _ = ehelper env left in
       let* subst_right, typ_right, _ = ehelper (TypeEnv.apply subst_left env) right in
       let* type_variable = fresh_var in
-      let get_typ res =
-        match res with
-        | Ok (_, typ, _) -> typ
-        | _ -> unit_typ
-      in
-      let args = get_args left right in
-      let typ_checker x = run (ehelper (TypeEnv.apply subst_left env) x) in
-      let args_typs = List.map args ~f:(fun x -> get_typ (typ_checker x)) in
-      let new_typ = List.fold args_typs ~init:typ_right ~f:(fun acc x -> TArr (acc, x)) in
       let* subst' =
         unify (arrow_t typ_right type_variable) (Subst.apply subst_right typ_left)
       in
-      let* fn_name = get_name left in
       let result_type = Subst.apply subst' type_variable in
+      let get_typ = function
+        | Ok (_, typ, _) -> return typ
+        | _ -> fail `Unreachable
+      in
+      let rec construct_typ acc = function
+        | EApp (l, r) ->
+          let* next_typ = get_typ @@ run @@ ehelper (TypeEnv.apply subst_left env) r in
+          construct_typ (TArr (acc, next_typ)) l
+        | _ -> return @@ TArr (acc, result_type)
+      in
+      let* new_typ' = construct_typ typ_right left in
       let* final_subst = Subst.compose_all [ subst_left; subst_right; subst' ] in
-      let new_final_typ = restrict (TArr (new_typ, result_type)) in
-      let new_env' = TypeEnv.extend env fn_name (Set.empty (module Int), new_final_typ) in
+      let new_env' =
+        TypeEnv.extend env fn_name (Set.empty (module Int), restrict new_typ')
+      in
       let new_env = if is_restricted typ_left then new_env' else env in
       return (final_subst, result_type, new_env)
     | EFun (PtVar head, body) ->
@@ -551,6 +516,10 @@ let infer =
       let* subst, typ, _ = ehelper env' body in
       let result_type = arrow_t (Subst.apply subst type_variable) typ in
       return (subst, result_type, env)
+    | EFun (PtWild, body) ->
+      let* type_variable = fresh_var in
+      let* subst, typ, _ = ehelper env body in
+      return (subst, arrow_t type_variable typ, env)
     | EFun (_, _) -> fail `Unreachable
     | EIf (condition, true_branch, false_branch) ->
       let* condition_subst, condition_type, _ = ehelper env condition in
